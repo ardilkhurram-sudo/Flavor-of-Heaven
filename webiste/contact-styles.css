@@ -1,0 +1,330 @@
+/* ============================================
+   CONTACT PAGE STYLES - Flavor of Heaven
+   ============================================ */
+
+/* Dark Header for Contact Page */
+.header-dark {
+  background-color: rgba(0, 0, 0, 0.9);
+}
+
+.header-dark .nav-link {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.header-dark .logo-text {
+  color: white;
+}
+
+.header-dark.scrolled {
+  background-color: rgba(0, 0, 0, 0.95);
+}
+
+.header-dark.scrolled .nav-link {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.header-dark.scrolled .logo-text {
+  color: white;
+}
+
+/* Contact Hero Section */
+.contact-hero {
+  position: relative;
+  height: 350px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+  overflow: hidden;
+}
+
+.contact-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url('../images/back.jpg') center/cover no-repeat;
+  opacity: 0.5;
+}
+
+.contact-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.6));
+}
+
+.contact-hero-content {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  color: white;
+}
+
+.contact-hero-content .hero-tagline {
+  display: block;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-primary-400);
+  margin-bottom: var(--space-md);
+}
+
+.contact-hero-content .hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 700;
+  margin-bottom: var(--space-md);
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.contact-hero-content .hero-subtitle {
+  font-size: 1.25rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Contact Content */
+.contact-content {
+  background-color: #111;
+  padding: var(--space-4xl) 0;
+  padding-top: 120px;
+  min-height: 100vh;
+}
+
+/* Contact Wrapper */
+.contact-wrapper {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3xl);
+}
+
+/* Contact Info Section */
+.contact-info-section {
+  padding-right: var(--space-xl);
+}
+
+.contact-section-title {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: var(--space-md);
+}
+
+.contact-section-desc {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  margin-bottom: var(--space-2xl);
+  line-height: 1.7;
+}
+
+/* Contact Cards */
+.contact-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.contact-info-card {
+  background: linear-gradient(145deg, #1e1e1e, #151515);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  border: 1px solid #2a2a2a;
+  transition: all var(--transition-normal);
+}
+
+.contact-info-card:hover {
+  border-color: var(--color-primary-500);
+  transform: translateX(10px);
+}
+
+.contact-info-card.whatsapp-card:hover {
+  border-color: #25d366;
+}
+
+.contact-info-icon {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600));
+  border-radius: 50%;
+  color: white;
+  flex-shrink: 0;
+}
+
+.whatsapp-card .contact-info-icon {
+  background: linear-gradient(135deg, #25d366, #128c7e);
+}
+
+.contact-info-details h3 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: var(--space-sm);
+}
+
+.contact-info-details p {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.contact-info-details a {
+  color: var(--color-primary-400);
+  transition: color var(--transition-fast);
+}
+
+.contact-info-details a:hover {
+  color: var(--color-primary-300);
+}
+
+.whatsapp-card .contact-info-details a {
+  color: #25d366;
+}
+
+.whatsapp-card .contact-info-details a:hover {
+  color: #4ade80;
+}
+
+/* Quick Contact Section */
+.quick-contact-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xl);
+}
+
+.quick-contact-box {
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700));
+  border-radius: var(--radius-lg);
+  padding: var(--space-2xl);
+  text-align: center;
+}
+
+.quick-contact-box h2 {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: var(--space-sm);
+}
+
+.quick-contact-box p {
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: var(--space-xl);
+}
+
+.quick-contact-buttons {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-whatsapp {
+  background-color: #25d366;
+  color: white;
+  border-color: #25d366;
+}
+
+.btn-whatsapp:hover {
+  background-color: #128c7e;
+  border-color: #128c7e;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Map Section */
+.map-section {
+  background: linear-gradient(145deg, #1e1e1e, #151515);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  border: 1px solid #2a2a2a;
+}
+
+.map-section h3 {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: white;
+  margin-bottom: var(--space-lg);
+}
+
+.map-container {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: var(--space-lg);
+}
+
+.map-address {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9375rem;
+}
+
+.map-address svg {
+  color: var(--color-primary-400);
+  flex-shrink: 0;
+}
+
+/* Responsive Styles */
+@media (max-width: 1024px) {
+  .contact-wrapper {
+    grid-template-columns: 1fr;
+    gap: var(--space-2xl);
+  }
+
+  .contact-info-section {
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .contact-hero {
+    height: 280px;
+  }
+
+  .contact-info-card {
+    padding: var(--space-lg);
+  }
+
+  .contact-info-icon {
+    width: 50px;
+    height: 50px;
+  }
+
+  .contact-info-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .quick-contact-buttons {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .quick-contact-buttons .btn {
+    width: 100%;
+    max-width: 280px;
+  }
+}
+
+@media (max-width: 576px) {
+  .contact-content {
+    padding: var(--space-2xl) 0;
+  }
+
+  .contact-section-title {
+    font-size: 1.5rem;
+  }
+
+  .contact-info-card:hover {
+    transform: none;
+  }
+}
