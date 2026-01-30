@@ -332,6 +332,39 @@ ul {
   background-color: var(--color-neutral-800);
 }
 
+/* Header Dark - for pages without hero video */
+.header-dark {
+  background-color: var(--color-neutral-900);
+}
+
+.header-dark .nav-link {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.header-dark .logo-text {
+  color: white;
+}
+
+.header-dark.scrolled {
+  background-color: var(--color-neutral-900);
+}
+
+.header-dark.scrolled .nav-link {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.header-dark.scrolled .logo-text {
+  color: white;
+}
+
+.header-dark .nav-toggle span {
+  background-color: white;
+}
+
+.header-dark.scrolled .nav-toggle span {
+  background-color: white;
+}
+
 /* ============================================
    HERO SECTION
    ============================================ */
@@ -381,6 +414,7 @@ ul {
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
   z-index: 2;
+  pointer-events: none;
 }
 
 .hero-content {
