@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  whatsapp-bot:
+    build: .
+    restart: always
+    environment:
+      - OWNER_NUMBER=923456070954
+      - RESTAURANT_NAME=Flavour of Haven
+    volumes:
+      - ./session:/app/session      # Persist WhatsApp session (no re-scan needed)
+      - ./menu:/app/menu            # Menu images
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

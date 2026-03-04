@@ -1,0 +1,18 @@
+{
+  "name": "flavour-of-haven-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp chatbot for Flavour of Haven restaurant",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.23.0",
+    "qrcode-terminal": "^0.12.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
