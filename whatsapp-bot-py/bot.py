@@ -1,10 +1,11 @@
 """
 Flavour of Haven — WhatsApp Bot
-Uses Playwright + persistent Chromium session (same approach as hackathon watcher).
+Uses Playwright + persistent Chromium session.
 
 Usage:
-  First time:  python bot.py --login    ← opens browser, scan QR code once
-  After that:  python bot.py            ← runs silently in background
+  First time:  python bot.py --login         ← opens browser, scan QR once
+  Normal run:  python bot.py                 ← headless background bot
+  Debug run:   python bot.py --debug         ← visible browser + extra logs
 """
 
 import os
@@ -13,16 +14,19 @@ import time
 import argparse
 import urllib.parse
 from pathlib import Path
+import pyperclip
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
 
 load_dotenv()
 
 # ─── Config ──────────────────────────────────────────────────────────────────
-OWNER_NUMBER  = os.getenv("OWNER_NUMBER",    "923456070954")
-RESTAURANT    = os.getenv("RESTAURANT_NAME", "Flavour of Haven")
-SESSION_DIR   = Path(__file__).parent / "sessions" / "whatsapp"
-MENU_DIR      = Path(__file__).parent.parent / "whatsapp-bot" / "menu"
+OWNER_NUMBER = os.getenv("OWNER_NUMBER",    "923456070954")
+RESTAURANT   = os.getenv("RESTAURANT_NAME", "Flavour of Haven")
+SESSION_DIR  = Path(__file__).parent / "sessions" / "whatsapp"
+MENU_DIR     = Path(__file__).parent.parent / "whatsapp-bot" / "menu"
+
+DEBUG = False  # set via --debug flag
 
 # ─── Conversation states ──────────────────────────────────────────────────────
 NEW      = "new"
@@ -30,15 +34,17 @@ ORDERING = "ordering"
 NAME     = "name"
 DONE     = "done"
 
-# Active sessions: chat_name → { state, order, name, last_msg }
-sessions = {}
+sessions = {}  # chat_name → { state, order, name, last_msg }
 
 
-# ─── Login (run once to scan QR) ─────────────────────────────────────────────
+def log(msg):
+    print(f"[{time.strftime('%H:%M:%S')}] {msg}")
+
+
+# ─── Login ────────────────────────────────────────────────────────────────────
 def login():
     print("\n📱 Opening WhatsApp Web — scan the QR code with your phone...\n")
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
-
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             str(SESSION_DIR),
@@ -48,69 +54,74 @@ def login():
         )
         page = context.pages[0] if context.pages else context.new_page()
         page.goto("https://web.whatsapp.com")
-
-        print("Waiting for you to scan the QR code...")
+        print("Scan the QR code in the browser window.")
         print("Once WhatsApp loads fully, press Enter here.\n")
         input("Press Enter after you're logged in ▶ ")
-
         context.close()
-        print(f"\n✅ Session saved to: {SESSION_DIR}")
-        print("Now run:  python bot.py\n")
+    print(f"\n✅ Session saved to: {SESSION_DIR}")
+    print("Now run:  python bot.py\n")
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def get_menu_images():
     if not MENU_DIR.exists():
+        log(f"⚠️  Menu folder not found: {MENU_DIR}")
         return []
-    return sorted(
+    imgs = sorted(
         f for f in MENU_DIR.iterdir()
         if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
     )
+    if DEBUG:
+        log(f"  Menu images found: {[i.name for i in imgs]}")
+    return imgs
 
 
 def send_text(page, text):
-    """Type and send a text message in the currently open chat."""
-    box = page.locator('[data-testid="conversation-compose-box-input"]')
-    box.click()
-    # Use clipboard paste to preserve emoji & special chars
-    page.evaluate(
-        f"""
-        const box = document.querySelector('[data-testid="conversation-compose-box-input"]');
-        box.focus();
-        document.execCommand('insertText', false, {repr(text)});
-        """)
-    page.keyboard.press("Enter")
-    time.sleep(0.6)
+    """Send a text message using clipboard paste (most reliable method)."""
+    try:
+        pyperclip.copy(text)
+        box = page.locator('[data-testid="conversation-compose-box-input"]')
+        box.wait_for(timeout=5000)
+        box.click()
+        time.sleep(0.2)
+        page.keyboard.press("Control+v")
+        time.sleep(0.3)
+        page.keyboard.press("Enter")
+        time.sleep(0.8)
+        if DEBUG:
+            log(f"  ✉️  Sent: {text[:60]}...")
+    except Exception as e:
+        log(f"  ❌ send_text failed: {e}")
 
 
 def send_image(page, image_path):
-    """Attach and send a single image in the currently open chat."""
+    """Attach and send an image in the current chat."""
     try:
-        # Click paperclip
-        page.locator('[data-testid="attach-menu-icon"]').click()
-        time.sleep(0.5)
+        page.locator('[data-testid="attach-menu-icon"]').click(timeout=5000)
+        time.sleep(0.6)
 
-        # Upload via file chooser
         with page.expect_file_chooser(timeout=6000) as fc_info:
             page.locator('[data-testid="mi-attach-media"]').click()
         fc_info.value.set_files(str(image_path))
-        time.sleep(1.5)
+        time.sleep(2)
 
-        # Send
+        # Try the send button, fall back to Enter
         send_btn = page.locator('[data-testid="send-image-button"]')
         if send_btn.count():
             send_btn.click()
         else:
             page.keyboard.press("Enter")
-        time.sleep(1)
+        time.sleep(1.5)
+        if DEBUG:
+            log(f"  🖼️  Sent image: {image_path.name}")
         return True
     except Exception as e:
-        print(f"  ⚠️  Image send failed ({image_path.name}): {e}")
+        log(f"  ⚠️  Image send failed ({image_path.name}): {e}")
         return False
 
 
 def notify_owner(context, session, chat_name):
-    """Open a new tab, send order details to owner, then close the tab."""
+    """Send new order alert to owner in a separate tab."""
     now = time.strftime("%d/%m/%Y %I:%M %p")
     msg = (
         f"🔔 *NEW ORDER — {RESTAURANT}*\n"
@@ -126,84 +137,110 @@ def notify_owner(context, session, chat_name):
     try:
         tab.goto(f"https://web.whatsapp.com/send?phone={OWNER_NUMBER}&text={encoded}")
         tab.wait_for_selector(
-            '[data-testid="conversation-compose-box-input"]',
-            timeout=20000,
+            '[data-testid="conversation-compose-box-input"]', timeout=20000
         )
-        time.sleep(1)
+        time.sleep(1.5)
         tab.keyboard.press("Enter")
         time.sleep(2)
-        print(f"  ✅ Owner notified for order from {session['name']}")
+        log(f"  ✅ Owner notified — order from {session['name']}")
     except Exception as e:
-        print(f"  ⚠️  Could not notify owner: {e}")
+        log(f"  ⚠️  Owner notification failed: {e}")
     finally:
         tab.close()
 
 
-# ─── Message extraction ───────────────────────────────────────────────────────
+# ─── Message / chat extraction ────────────────────────────────────────────────
 def get_latest_incoming(page):
-    """Return text of the latest incoming message in the open chat."""
-    return page.evaluate("""
+    """Extract text of the latest incoming message in the open chat."""
+    result = page.evaluate("""
         () => {
-            const msgs = [...document.querySelectorAll('.message-in')];
-            if (!msgs.length) return null;
-            const last = msgs[msgs.length - 1];
-            const spans = [...last.querySelectorAll('span[dir="ltr"]')];
-            for (const s of spans) {
-                const t = s.innerText.trim();
-                if (t && !/^\\d{1,2}:\\d{2}\\s*(AM|PM)$/i.test(t)) return t;
+            // Try multiple selectors for incoming messages
+            const selectors = [
+                '.message-in span[dir="ltr"]',
+                '[data-testid="msg-container"] span[dir="ltr"]',
+                'div.copyable-text span[dir="ltr"]',
+            ];
+            for (const sel of selectors) {
+                const spans = [...document.querySelectorAll(sel)];
+                // Walk backwards to find last real text
+                for (let i = spans.length - 1; i >= 0; i--) {
+                    const t = spans[i].innerText.trim();
+                    if (t && t.length > 0 && !/^\\d{1,2}:\\d{2}(\\s*(AM|PM))?$/.test(t)) {
+                        return t;
+                    }
+                }
             }
             return null;
         }
     """)
+    if DEBUG:
+        log(f"  Latest incoming msg: {result!r}")
+    return result
 
 
 def get_unread_chats(page):
-    """Return list of {index, name} for chats with unread badges."""
+    """Return [{index, name}] for chats showing unread badge."""
     try:
         page.wait_for_selector('[data-testid="chat-list"]', timeout=8000)
     except PWTimeoutError:
+        log("  ⚠️  Chat list not found")
         return []
 
-    return page.evaluate("""
+    result = page.evaluate("""
         () => {
             const results = [];
-            const items = document.querySelectorAll('[data-testid="cell-frame-container"]');
+            // Multiple selectors for chat list items
+            const items = document.querySelectorAll(
+                '[data-testid="cell-frame-container"], [role="listitem"]'
+            );
             items.forEach((item, idx) => {
                 const badge = item.querySelector(
-                    '[data-testid="icon-unread-count"], [aria-label*="unread"]'
+                    '[data-testid="icon-unread-count"], ' +
+                    '[aria-label*="unread"], ' +
+                    'span[data-testid="unread-count"], ' +
+                    'span[aria-label*="unread"]'
                 );
                 if (!badge) return;
-                const nameEl = item.querySelector('[data-testid="cell-frame-title"]');
-                results.push({ index: idx, name: nameEl?.textContent || 'Unknown' });
+                const nameEl = item.querySelector(
+                    '[data-testid="cell-frame-title"], ' +
+                    'span[dir="auto"]'
+                );
+                results.push({
+                    index: idx,
+                    name: nameEl?.textContent?.trim() || 'Unknown',
+                    badge_text: badge.textContent?.trim(),
+                });
             });
             return results;
         }
     """) or []
 
+    if DEBUG:
+        log(f"  Unread chats found: {result}")
+    return result
+
 
 # ─── Conversation handler ─────────────────────────────────────────────────────
 def handle_chat(page, context, chat_name, msg):
-    # Init session
     if chat_name not in sessions:
-        sessions[chat_name] = {
-            "state": NEW, "order": "", "name": "", "last_msg": ""
-        }
+        sessions[chat_name] = {"state": NEW, "order": "", "name": "", "last_msg": ""}
     s = sessions[chat_name]
 
-    # Deduplicate — skip if same message as last time
+    # Skip if same message as last processed
     if msg == s["last_msg"]:
+        if DEBUG:
+            log(f"  Skipping duplicate msg from {chat_name}")
         return
     s["last_msg"] = msg
 
-    print(f"  [{chat_name}] state={s['state']} msg='{msg}'")
+    log(f"  [{chat_name}] state={s['state']} | msg='{msg}'")
 
-    # ── NEW ───────────────────────────────────────────────────────────────────
     if s["state"] == NEW:
         send_text(
             page,
             f"👋 *Welcome to {RESTAURANT}!*\n\n"
-            f"We're delighted to have you here. 😊\n"
-            f"Here's our menu — take a look! 👇",
+            "We're delighted to have you here. 😊\n"
+            "Here's our menu — take a look! 👇",
         )
         images = get_menu_images()
         if not images:
@@ -215,51 +252,46 @@ def handle_chat(page, context, chat_name, msg):
         send_text(
             page,
             "✍️ *What would you like to order?*\n\n"
-            "Just type it below! 👇\n"
+            "Just type your order below! 👇\n"
             "_(Example: 2 Zinger Burgers, 1 fries, 2 Pepsi)_",
         )
         s["state"] = ORDERING
 
-    # ── ORDERING ──────────────────────────────────────────────────────────────
     elif s["state"] == ORDERING:
-        if len(msg) < 3:
+        if len(msg.strip()) < 3:
             send_text(
                 page,
                 "🤔 Please type your full order.\n"
                 "_(Example: 1 Burger, 1 fries, 1 Pepsi)_",
             )
             return
-        s["order"] = msg
+        s["order"] = msg.strip()
         send_text(
             page,
-            f"✅ *Got it! Your order:*\n_{msg}_\n\n"
-            f"May I have your *name* please? 😊",
+            f"✅ *Got it! Your order:*\n_{s['order']}_\n\n"
+            "May I have your *name* please? 😊",
         )
         s["state"] = NAME
 
-    # ── NAME ──────────────────────────────────────────────────────────────────
     elif s["state"] == NAME:
-        if len(msg) < 2:
+        if len(msg.strip()) < 2:
             send_text(page, "Please enter your name to confirm the order. 😊")
             return
-        s["name"] = msg
+        s["name"] = msg.strip()
         send_text(
             page,
             f"🎉 *Order Confirmed!*\n\n"
-            f"👤 Name: *{msg}*\n"
+            f"👤 Name: *{s['name']}*\n"
             f"🍔 Order: _{s['order']}_\n\n"
-            f"Thank you! We'll prepare your order shortly. 🙏\n"
-            f"For queries call: *0345-6070954*",
+            "Thank you! We'll prepare your order shortly. 🙏\n"
+            "For queries call: *0345-6070954*",
         )
         notify_owner(context, s, chat_name)
         s["state"] = DONE
 
-    # ── DONE ──────────────────────────────────────────────────────────────────
     elif s["state"] == DONE:
         if any(kw in msg.lower() for kw in ["order", "menu", "again", "new"]):
-            sessions[chat_name] = {
-                "state": NEW, "order": "", "name": "", "last_msg": ""
-            }
+            sessions[chat_name] = {"state": NEW, "order": "", "name": "", "last_msg": ""}
             send_text(page, "Sure! Let me show you the menu again. 😊")
             time.sleep(0.5)
             handle_chat(page, context, chat_name, msg)
@@ -273,13 +305,16 @@ def handle_chat(page, context, chat_name, msg):
 
 
 # ─── Main bot loop ────────────────────────────────────────────────────────────
-def run_bot():
-    print(f"\n🚀 Starting {RESTAURANT} WhatsApp Bot (headless)...\n")
+def run_bot(headless=True):
+    log(f"🚀 Starting {RESTAURANT} WhatsApp Bot {'(debug/visible)' if not headless else '(headless)'}...")
+    log(f"   Menu folder : {MENU_DIR}")
+    log(f"   Session dir : {SESSION_DIR}\n")
 
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             str(SESSION_DIR),
-            headless=True,
+            headless=headless,
+            viewport={"width": 1280, "height": 800},
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
@@ -291,65 +326,68 @@ def run_bot():
         page = context.pages[0] if context.pages else context.new_page()
         page.goto("https://web.whatsapp.com")
 
-        # Check if QR code is shown (not logged in)
+        # Check login
         try:
             page.wait_for_selector(
-                'canvas[aria-label*="QR"], [data-testid="qrcode"]',
-                timeout=8000,
+                'canvas[aria-label*="QR"], [data-testid="qrcode"]', timeout=8000
             )
-            print("❌ Not logged in! Run first:  python bot.py --login\n")
+            log("❌ Not logged in! Run:  python bot.py --login")
             context.close()
             sys.exit(1)
         except PWTimeoutError:
-            pass  # Already logged in ✅
+            pass
 
-        # Wait for chat list
-        print("⏳ Loading WhatsApp Web...")
+        log("⏳ Loading WhatsApp Web...")
         try:
             page.wait_for_selector('[data-testid="chat-list"]', timeout=30000)
         except PWTimeoutError:
-            print("❌ WhatsApp did not load. Check your internet.")
+            log("❌ Chat list did not load. Check internet connection.")
             context.close()
             sys.exit(1)
 
-        print(f"✅ Bot is LIVE — monitoring {RESTAURANT} WhatsApp\n")
+        log(f"✅ Bot is LIVE — monitoring {RESTAURANT} WhatsApp\n")
 
-        # ── Polling loop ──────────────────────────────────────────────────────
         while True:
             try:
-                # Refresh to main list
                 page.goto("https://web.whatsapp.com")
                 page.wait_for_selector('[data-testid="chat-list"]', timeout=10000)
                 time.sleep(2)
 
                 unread = get_unread_chats(page)
 
-                for chat in unread:
-                    chat_name = chat["name"]
-                    print(f"📨 Unread message from: {chat_name}")
+                if not unread:
+                    if DEBUG:
+                        log("  No unread chats.")
+                else:
+                    for chat in unread:
+                        chat_name = chat["name"]
+                        log(f"📨 Unread from: {chat_name} (badge: {chat.get('badge_text')})")
 
-                    # Open the chat
-                    try:
-                        items = page.locator('[data-testid="cell-frame-container"]')
-                        items.nth(chat["index"]).click()
-                        time.sleep(1.5)
-                    except Exception:
-                        continue
+                        try:
+                            items = page.locator(
+                                '[data-testid="cell-frame-container"], [role="listitem"]'
+                            )
+                            items.nth(chat["index"]).click()
+                            time.sleep(2)
+                        except Exception as e:
+                            log(f"  ⚠️  Could not open chat: {e}")
+                            continue
 
-                    # Get latest incoming message
-                    msg = get_latest_incoming(page)
-                    if msg:
-                        handle_chat(page, context, chat_name, msg)
+                        msg = get_latest_incoming(page)
+                        if msg:
+                            handle_chat(page, context, chat_name, msg)
+                        else:
+                            log(f"  ⚠️  Could not read message from {chat_name}")
 
-                    time.sleep(1)
+                        time.sleep(1)
 
-                time.sleep(5)  # Poll every 5 seconds
+                time.sleep(4)
 
             except KeyboardInterrupt:
-                print("\n🛑 Bot stopped by user.")
+                log("\n🛑 Bot stopped.")
                 break
             except Exception as e:
-                print(f"⚠️  Error: {e} — retrying in 5s...")
+                log(f"⚠️  Error: {e} — retrying in 5s...")
                 time.sleep(5)
 
         context.close()
@@ -358,16 +396,16 @@ def run_bot():
 # ─── Entry point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=f"{RESTAURANT} WhatsApp Bot")
-    parser.add_argument(
-        "--login",
-        action="store_true",
-        help="Open browser to scan WhatsApp QR code (run once)",
-    )
+    parser.add_argument("--login", action="store_true", help="Scan QR code (run once)")
+    parser.add_argument("--debug", action="store_true", help="Visible browser + verbose logs")
     args = parser.parse_args()
 
     SESSION_DIR.mkdir(parents=True, exist_ok=True)
 
     if args.login:
         login()
+    elif args.debug:
+        DEBUG = True
+        run_bot(headless=False)
     else:
-        run_bot()
+        run_bot(headless=True)
